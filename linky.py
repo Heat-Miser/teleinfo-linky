@@ -156,6 +156,7 @@ def linky():
                     key = tab[0]
 
                     separator = line_str[len(key):len(key) +1]
+                    tab = line_str.split(separator)
 
                     if key not in KEYS_WITHOUT_CHECKSUM:
                         checksum = tab[-1]
@@ -192,7 +193,7 @@ def linky():
                         logging.debug(f'Trame envoyée {frame}')
 
                         # Horodatage de la trame reçue
-                        frame['TIME'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                        frame['TIME'] = datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                         # Ajout à la queue d'envoi vers InfluxDB
                         if influxdb_send_data:
