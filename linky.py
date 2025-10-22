@@ -61,6 +61,7 @@ def _send_frames_to_influx():
             try:
                 write_client.write(bucket=influxdb_bucket, record=record)
                 written = True
+                logging.info(f'Données envoyées dans influx')
             except ApiException as exc:
                 if exc.status == 404:
                     logging.error(f'Le bucket {influxdb_bucket} n\'existe pas')
@@ -87,6 +88,8 @@ def _send_frames_to_influx():
 
 def _checksum(key, val, separator, checksum):
     """Vérifie la somme de contrôle du groupe d'information. Réf Enedis-NOI-CPT_02E, page 19."""
+    if key == "PTEC":
+        return True
     data = f'{key}{separator}{val}'
     if linky_checksum_method == 2:
         data += separator
@@ -141,27 +144,40 @@ def linky():
                     line_str = line.decode('ascii').rstrip()
                     logging.debug(f'Groupe d\'information brut : {line_str}')
 
-                    # Récupération de la somme de contrôle (qui est le dernier caractère de la ligne)
-                    checksum = line_str[-1]
+                    if line_str.startswith("PTEC"):
+                        pos = line_str.find(" ")
+                        key = line_str[0:pos]
+                        val = line_str[pos+1:-2]
+                        checksum = "1"
+                    else:
+                        # Récupération de la somme de contrôle (qui est le dernier caractère de la ligne)
+                        checksum = line_str[-1]
 
-                    # Identification du séparateur en vigueur (espace ou tabulation)
-                    separator = line_str[-2]
+                        # Identification du séparateur en vigueur (espace ou tabulation)
+                        separator = line_str[-2]
 
-                    # Position du séparateur entre le champ étiquette et le champ données
-                    pos = line_str.find(separator)
+                        # Position du séparateur entre le champ étiquette et le champ données
+                        pos = line_str.find(separator)
 
-                    # Extraction de l'étiquette
-                    key = line_str[0:pos]
+                        # Extraction de l'étiquette
+                        key = line_str[0:pos]
 
-                    # Extraction de la donnée
-                    val = line_str[pos+1:-2]
+                        # Extraction de la donnée
+                        val = line_str[pos+1:-2]
 
                     # Est-ce une étiquette qui nous intéresse ?
+                    logging.debug(f'Récupération de la clé #{key}#')
+                    logging.debug(f'Valeur associée #{val}#')
                     if key in linky_keys:
                         # Vérification de la somme de contrôle
                         if _checksum(key, val, separator, checksum):
                             # Ajout de la valeur
-                            frame[key] = int(val)
+                            if key not in ["OPTARIF", "PTEC"]:
+                                frame[key] = int(val)
+                                logging.debug(f'Valeur {key} récupérée avec {int(val)}')
+                            else:
+                                logging.debug(f'Valeur {key} récupérée avec {val}')
+                                frame[key] = val
                         else:
                             logging.debug(
                                 f'Somme de contrôle erronée pour {key}')
@@ -170,6 +186,7 @@ def linky():
                     if STOP_FRAME in line:
                         num_keys = len(frame)
                         logging.info(f'Trame reçue ({num_keys} étiquettes traités)')
+                        logging.debug(f'Trame envoyée {frame}')
 
                         # Horodatage de la trame reçue
                         frame['TIME'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
