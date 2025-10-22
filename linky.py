@@ -28,6 +28,11 @@ from urllib3 import Retry
 from urllib3.exceptions import HTTPError
 
 DEFAULT_KEYS = ('ISOUSC', 'BASE', 'IINST',)
+TEXT_RELATED_KEYS = ["PTEC", "OPTARIF", "NGTF", "LTARF", "MSG1"]
+KEYS_WITH_TIMESTAMPS = ["DATE", "SMAXSN", "SMAXSN1", "SMAXSN2", "SMAXSN3", "SMAXSN", "SMAXSN1-1", "SMAXSN2-1", "SMAXSN3-1", "SMAXIN", "SMAXIN-1", "CCASN", "CCASN-1", "CCAIN", "CCAIN-1", "UMOY1", "UMOY2", "UMOY3", "DPM1", "FPM1", "DPM2", "FPM2", "DPM3", "FPM3"]
+KEYS_WITHOUT_CHECKSUM = ["PTEC"]
+
+
 DEFAULT_CHECKSUM_METHOD = 1
 
 START_FRAME = b'\x02'  # STX, Start of Text
@@ -88,7 +93,7 @@ def _send_frames_to_influx():
 
 def _checksum(key, val, separator, checksum):
     """Vérifie la somme de contrôle du groupe d'information. Réf Enedis-NOI-CPT_02E, page 19."""
-    if key == "PTEC":
+    if key in KEYS_WITHOUT_CHECKSUM:
         return True
     data = f'{key}{separator}{val}'
     if linky_checksum_method == 2:
@@ -144,26 +149,24 @@ def linky():
                     line_str = line.decode('ascii').rstrip()
                     logging.debug(f'Groupe d\'information brut : {line_str}')
 
-                    if line_str.startswith("PTEC"):
-                        pos = line_str.find(" ")
-                        key = line_str[0:pos]
-                        val = line_str[pos+1:-2]
-                        checksum = "1"
+                    # Découpage de la ligne
+                    tab = line_str.split()
+                    
+                    # Extraction de l'étiquette
+                    key = tab[0]
+
+                    separator = line_str[len(key):len(key) +1]
+
+                    if key not in KEYS_WITHOUT_CHECKSUM:
+                        checksum = tab[-1]
                     else:
-                        # Récupération de la somme de contrôle (qui est le dernier caractère de la ligne)
-                        checksum = line_str[-1]
-
-                        # Identification du séparateur en vigueur (espace ou tabulation)
-                        separator = line_str[-2]
-
-                        # Position du séparateur entre le champ étiquette et le champ données
-                        pos = line_str.find(separator)
-
-                        # Extraction de l'étiquette
-                        key = line_str[0:pos]
-
+                        checksum = "1"
+                    
+                    if key not in KEYS_WITH_TIMESTAMPS:
                         # Extraction de la donnée
-                        val = line_str[pos+1:-2]
+                        val = tab[1]
+                    else:
+                        val = tab[2]
 
                     # Est-ce une étiquette qui nous intéresse ?
                     logging.debug(f'Récupération de la clé #{key}#')
@@ -172,7 +175,7 @@ def linky():
                         # Vérification de la somme de contrôle
                         if _checksum(key, val, separator, checksum):
                             # Ajout de la valeur
-                            if key not in ["OPTARIF", "PTEC"]:
+                            if key not in TEXT_RELATED_KEYS:
                                 frame[key] = int(val)
                                 logging.debug(f'Valeur {key} récupérée avec {int(val)}')
                             else:
