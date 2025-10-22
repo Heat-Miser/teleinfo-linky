@@ -16,7 +16,7 @@ import signal
 import termios
 import threading
 import time
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 import serial
 import yaml
@@ -193,7 +193,7 @@ def linky():
                         logging.debug(f'Trame envoyée {frame}')
 
                         # Horodatage de la trame reçue
-                        frame['TIME'] = datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        frame['TIME'] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                         # Ajout à la queue d'envoi vers InfluxDB
                         if influxdb_send_data:
